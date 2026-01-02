@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HRT Injection Visualizer</title>
+    <style>
+        /* --- 1. GLOBAL STYLES --- */
+        :root {
+            --primary: #2c3e50;
+            --accent: #2980b9;
+            --bg: #f0f4f8;
+            --card-bg: #ffffff;
+            --text-main: #34495e;
+            --text-muted: #7f8c8d;
+            --success: #27ae60;
+            --error: #c0392b;
+            --liquid: #a2ded0;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: var(--bg);
+            color: var(--text-main);
+            margin: 0; 
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding-bottom: 60px; /* Space for footer */
+        }
+
+        /* --- 2. HEADER --- */
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 { margin: 0; color: var(--primary); font-size: 1.8rem; }
+        .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-top: 5px; }
+
+        /* --- 3. LAYOUT GRID --- */
+        .app-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 25px;
+        }
+        @media (min-width: 768px) {
+            .app-grid { grid-template-columns: 1fr 1fr; align-items: start; }
+        }
+
+        /* --- 4. CARD STYLES --- */
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        /* --- 5. FORM INPUTS --- */
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: var(--primary); font-size: 0.95rem; }
+        
+        input, select { 
+            width: 100%; 
+            padding: 12px; 
+            box-sizing: border-box; 
+            font-size: 16px; 
+            border: 2px solid #e0e6ed; 
+            border-radius: 8px; 
+            transition: border-color 0.2s;
+            background: #fff;
+        }
+        input:focus, select:focus { border-color: var(--accent); outline: none; }
+
+        /* --- 6. RESULTS BOX --- */
+        #result-box {
+            background: #eefcf5;
+            border-left: 6px solid var(--success);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        #result-box.error-state { background: #fceeee; border-left-color: var(--error); }
+        
+        .result-label { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .result-value { font-size: 2rem; font-weight: 800; color: var(--primary); margin: 5px 0; }
+        .result-error { color: var(--error); font-weight: 600; font-size: 0.9rem; }
+
+        /* --- 7. VISUALIZERS --- */
+        .vis-container {
+            display: flex;
+            flex-direction: row;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        /* Main Syringe */
+        .syringe-wrapper { flex: 2; text-align: center; }
+        .zoom-wrapper { flex: 1; text-align: center; display: flex; flex-direction: column; align-items: center; }
+
+        svg { 
+            overflow: hidden;
+            display: block;
+			margin: 0 auto;
+        }
+        
+        /* The Zoom Lens Circle */
+        .zoom-lens {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 4px solid var(--accent);
+            background: white;
+            overflow: hidden; /* Clips the square SVG into a circle */
+			display: block;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            position: relative;
+            margin-bottom: 10px;
+        }
+        
+        /* Label for the visualizers */
+        .vis-label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; display: block; }
+
+        /* SVG Components */
+        .svg-barrel { fill: none; stroke: var(--primary); stroke-width: 3; }
+        .svg-needle { stroke: #95a5a6; stroke-width: 2; }
+        .svg-liquid { fill: var(--liquid); transition: height 0.3s ease-out; } 
+        .svg-plunger-stopper { fill: var(--primary); }
+        .svg-plunger-rod { fill: #ecf0f1; stroke: #bdc3c7; stroke-width: 1; }
+        
+        .tick-minor { stroke: #95a5a6; stroke-width: 1; }
+        .tick-major { stroke: var(--primary); stroke-width: 2; }
+        .tick-text { font-size: 11px; font-family: sans-serif; fill: var(--primary); text-anchor: end; dominant-baseline: middle; font-weight: 500;}
+
+        /* --- 8. FOOTER / DISCLAIMER --- */
+        footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e6ed;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            text-align: center;
+        }
+        .disclaimer { 
+            background: #fff3cd; 
+            color: #856404; 
+            padding: 10px; 
+            border-radius: 6px; 
+            margin-bottom: 20px; 
+            border: 1px solid #ffeeba;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Injection Visualizer</h1>
+        <div class="subtitle">HRT Dose Calculator & Syringe Scale Helper</div>
+    </header>
+
+    <div class="disclaimer">
+        <strong>⚠️ IMPORTANT:</strong> This tool is for educational visualization only. It is not medical advice. Always verify your dose with your prescription label and healthcare provider.
+    </div>
+
+    <div class="app-grid">
+        
+        <div class="card controls">
+            <div class="form-group">
+                <label for="dose">Prescribed Dose (mg)</label>
+                <input type="number" id="dose" placeholder="e.g. 6" step="any" inputmode="decimal">
+            </div>
+
+            <div class="form-group">
+                <label for="concentration">Vial Concentration (mg/mL)</label>
+                <input type="number" id="concentration" list="conc-presets" placeholder="Select or type..." step="any" inputmode="decimal">
+                <datalist id="conc-presets">
+                    <option value="10"></option>
+                    <option value="20"></option>
+                    <option value="40"></option>
+                    <option value="100"></option>
+                    <option value="200"></option>
+                </datalist>
+            </div>
+
+            <div class="form-group">
+                <label for="syringe">Syringe Size</label>
+                <select id="syringe">
+                    <option value="0.3">0.3 mL (0.3cc)</option>
+                    <option value="0.5">0.5 mL (0.5cc)</option>
+                    <option value="1.0" selected>1.0 mL (1cc)</option>
+                    <option value="3.0">3.0 mL (3cc)</option>
+                </select>
+            </div>
+
+            <div id="result-box">
+                <div class="result-label">Draw to this mark:</div>
+                <div id="volume-result" class="result-value">-- mL</div>
+                <div id="status-text" class="result-error" style="display:none;"></div>
+            </div>
+        </div>
+
+        <div class="card vis-container">
+            
+            <div class="syringe-wrapper">
+                <span class="vis-label">Full Syringe View</span>
+                <svg id="main-svg" viewBox="-25 0 140 450" xmlns="http://www.w3.org/2000/svg" height="400">
+                    <line x1="50" y1="5" x2="50" y2="50" class="svg-needle" />
+                    <rect id="liquid-rect" x="25" y="50" width="50" height="0" class="svg-liquid" />
+                    <g id="ticks-group"></g>
+                    <rect x="20" y="50" width="60" height="300" rx="2" class="svg-barrel" />
+                    <g id="plunger-group">
+                        <path d="M 26 50 L 74 50 L 74 60 C 74 70 26 70 26 60 Z" class="svg-plunger-stopper" />
+                        <rect x="42" y="60" width="16" height="300" class="svg-plunger-rod" />
+                        <rect x="30" y="350" width="40" height="10" class="svg-plunger-rod" rx="2" />
+                    </g>
+                </svg>
+            </div>
+
+            <div class="zoom-wrapper">
+                <span class="vis-label">Zoom View</span>
+                <div class="zoom-lens">
+                    <svg id="zoom-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+                        <rect id="zoom-liquid-rect" x="25" y="50" width="50" height="0" class="svg-liquid" />
+                        <g id="zoom-ticks-group"></g>
+                        <rect x="20" y="50" width="60" height="300" rx="0" class="svg-barrel" /> <g id="zoom-plunger-group">
+                            <path d="M 26 50 L 74 50 L 74 60 C 74 70 26 70 26 60 Z" class="svg-plunger-stopper" />
+                            </g>
+                    </svg>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top:5px; line-height: 1.3;">
+                    Plunger tip aligns<br>with line.
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+<footer>
+        <p>Built to help reduce math anxiety. Privacy focused: No data leaves your device.</p>
+        <p style="margin-top: 10px; font-size: 0.75rem;">
+            MIT License. &copy; 2026 Beth Tweedy, UC Davis Libraries.<br>
+            Contact: <a href="mailto:bntweedy@ucdavis.edu" style="color: inherit;">bntweedy@ucdavis.edu</a><br>
+            Code assistance provided by Google Gemini.
+        </p>
+    </footer>
+</div>
+
+<script>
+    // --- CONFIG ---
+    const SVG_CONFIG = {
+        barrelTopY: 50,
+        barrelHeight: 300,
+        barrelLeftX: 20,
+        tickStartX: 20
+    };
+
+    const SYRINGE_SPECS = {
+        "0.3": { major: 0.05, minor: 0.01 },
+        "0.5": { major: 0.1, minor: 0.01 },
+        "1.0": { major: 0.1, minor: 0.02 },
+        "3.0": { major: 0.5, minor: 0.1 }
+    };
+
+    // --- DOM ELEMENTS ---
+    const inputs = {
+        dose: document.getElementById('dose'),
+        concentration: document.getElementById('concentration'),
+        syringe: document.getElementById('syringe')
+    };
+    
+    // We have TWO sets of visual elements now (Main + Zoom)
+    const visuals = {
+        main: {
+            liquid: document.getElementById('liquid-rect'),
+            plunger: document.getElementById('plunger-group'),
+            ticks: document.getElementById('ticks-group')
+        },
+        zoom: {
+            svg: document.getElementById('zoom-svg'),
+            liquid: document.getElementById('zoom-liquid-rect'),
+            plunger: document.getElementById('zoom-plunger-group'),
+            ticks: document.getElementById('zoom-ticks-group')
+        }
+    };
+
+    const ui = {
+        resultBox: document.getElementById('result-box'),
+        volume: document.getElementById('volume-result'),
+        status: document.getElementById('status-text')
+    };
+
+    // --- STATE ---
+    const state = {
+        dose: parseFloat(localStorage.getItem('hrt_dose')) || 0,
+        concentration: parseFloat(localStorage.getItem('hrt_conc')) || 0,
+        syringe: parseFloat(localStorage.getItem('hrt_syringe')) || 1.0
+    };
+
+    // --- LOGIC ---
+    function calculate() {
+        let volume = 0;
+        if (state.dose > 0 && state.concentration > 0) {
+            volume = state.dose / state.concentration;
+        }
+
+        const displayVolume = Math.round(volume * 1000) / 1000;
+        const isValid = displayVolume <= state.syringe;
+
+        // UI Updates
+        if (displayVolume > state.syringe) {
+            renderError(`Requires larger syringe (${displayVolume} mL)`);
+        } else if (state.dose > 0 && state.concentration > 0) {
+            renderSuccess(displayVolume);
+        } else {
+            renderIdle();
+        }
+
+        // Always update visual, even if error (clamp to max)
+        updateVisuals(volume, state.syringe);
+    }
+
+    // --- DRAWING ENGINE ---
+
+    // 1. Generate Ticks (Runs on syringe change)
+    function drawTicks(syringeSize) {
+        // We generate the same HTML string for ticks and inject it into both SVGs
+        // This ensures they are perfectly identical.
+        
+        const specs = SYRINGE_SPECS[syringeSize.toFixed(1)] || SYRINGE_SPECS["1.0"];
+        const pixelsPerML = SVG_CONFIG.barrelHeight / syringeSize;
+        
+        // Use a document fragment for performance? 
+        // Since we need to insert into two different DOM nodes, string building is actually cleaner here.
+        let ticksHTML = "";
+
+        for (let v = 0; v <= syringeSize + 0.0001; v += specs.minor) {
+            const currentVol = Math.round(v * 1000) / 1000;
+            const yPos = SVG_CONFIG.barrelTopY + (currentVol * pixelsPerML);
+            
+            // Major tick detection
+            const isMajor = Math.abs(currentVol % specs.major) < 0.001 || Math.abs((currentVol % specs.major) - specs.major) < 0.001;
+
+            if (isMajor) {
+                // Major Line
+                ticksHTML += `<line x1="${SVG_CONFIG.tickStartX}" y1="${yPos}" x2="${SVG_CONFIG.tickStartX + 15}" y2="${yPos}" class="tick-major" />`;
+                // Text
+                ticksHTML += `<text x="${SVG_CONFIG.tickStartX - 5}" y="${yPos}" class="tick-text">${currentVol}</text>`;
+            } else {
+                // Minor Line
+                ticksHTML += `<line x1="${SVG_CONFIG.tickStartX}" y1="${yPos}" x2="${SVG_CONFIG.tickStartX + 8}" y2="${yPos}" class="tick-minor" />`;
+            }
+        }
+
+        // Inject into both SVGs
+        visuals.main.ticks.innerHTML = ticksHTML;
+        visuals.zoom.ticks.innerHTML = ticksHTML;
+    }
+
+// 2. Update Positions (Runs on input)
+    function updateVisuals(currentVolume, maxSyringeVolume) {
+        // A. Main Syringe Logic
+        let percentage = currentVolume / maxSyringeVolume;
+        if (percentage < 0) percentage = 0;
+        if (percentage > 1) percentage = 1;
+
+        const pixelFillHeight = percentage * SVG_CONFIG.barrelHeight;
+        const plungerY = pixelFillHeight; 
+
+        // Update Main Syringe
+        visuals.main.liquid.setAttribute('height', pixelFillHeight);
+        visuals.main.plunger.setAttribute('transform', `translate(0, ${plungerY})`);
+
+        // B. Zoom Syringe Logic
+        visuals.zoom.liquid.setAttribute('height', pixelFillHeight);
+        visuals.zoom.plunger.setAttribute('transform', `translate(0, ${plungerY})`);
+
+        // THE MAGIC: Update the ViewBox of the Zoom SVG
+        const tipAbsoluteY = SVG_CONFIG.barrelTopY + plungerY;
+        
+        // --- ZOOM & PAN SETTINGS ---
+        const zoomHeight = 60; // Larger height = Zoomed Out
+        const zoomWidth = 60;  // Slightly wider to accommodate the shift
+        
+        // Shift 'vbX' to -15 to see the numbers clearly on the left
+        const vbX = -15; 
+        const vbY = tipAbsoluteY - (zoomHeight / 2); 
+        
+        visuals.zoom.svg.setAttribute('viewBox', `${vbX} ${vbY} ${zoomWidth} ${zoomHeight}`);
+    }
+
+    // --- UI HELPERS ---
+    function renderSuccess(vol) {
+        ui.volume.innerText = `${vol} mL`;
+        ui.status.style.display = 'none';
+        ui.resultBox.className = ''; // Remove error class
+    }
+
+    function renderError(msg) {
+        ui.volume.innerText = "--";
+        ui.status.innerText = msg;
+        ui.status.style.display = 'block';
+        ui.resultBox.className = 'error-state';
+    }
+
+    function renderIdle() {
+        ui.volume.innerText = "-- mL";
+        ui.status.style.display = 'none';
+        ui.resultBox.className = '';
+    }
+
+    // --- INIT ---
+    function init() {
+        if(state.dose) inputs.dose.value = state.dose;
+        if(state.concentration) inputs.concentration.value = state.concentration;
+        inputs.syringe.value = state.syringe;
+
+        // Draw initial ticks
+        drawTicks(state.syringe);
+        calculate();
+
+        // Listeners
+        Object.values(inputs).forEach(input => {
+            input.addEventListener('input', () => {
+                const oldSyringe = state.syringe;
+                
+                state.dose = parseFloat(inputs.dose.value);
+                state.concentration = parseFloat(inputs.concentration.value);
+                state.syringe = parseFloat(inputs.syringe.value);
+
+                localStorage.setItem('hrt_dose', inputs.dose.value);
+                localStorage.setItem('hrt_conc', inputs.concentration.value);
+                localStorage.setItem('hrt_syringe', inputs.syringe.value);
+
+                if (oldSyringe !== state.syringe) {
+                    drawTicks(state.syringe);
+                }
+
+                calculate();
+            });
+        });
+    }
+
+    init();
+</script>
+
+</body>
+</html>
